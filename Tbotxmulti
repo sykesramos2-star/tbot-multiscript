@@ -1,0 +1,580 @@
+--[[
+    HELLSTAR HUB // FIXED TBOT & HITBOX EXPANDER
+    Features: 15-Stud Hitbox, Auto-Respawn Hitbox Apply, Floating Toggle
+--]]
+
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Clean up old
+local old = CoreGui:FindFirstChild("HellStarUI")
+if old then old:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "HellStarUI"
+ScreenGui.ResetOnSpawn = false 
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = CoreGui
+
+-- Fonts & Colors
+local mainFont = Enum.Font.Bangers
+local regularFont = Enum.Font.RobotoCondensed
+local tbotFont = Enum.Font.GothamBold
+
+local bgColor = Color3.fromRGB(18, 18, 20)
+local sidebarColor = Color3.fromRGB(25, 25, 28)
+local textColor = Color3.fromRGB(255, 255, 255)
+local textDim = Color3.fromRGB(150, 150, 150)
+local accentColor = Color3.fromRGB(255, 50, 50)
+local darkRow = Color3.fromRGB(30, 30, 34)
+
+local openTweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+local closeTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local hoverTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
+-- ==========================================
+-- FLOATING TBOT BUTTON & LOGIC
+-- ==========================================
+local TbotLabelFrame = Instance.new("TextButton")
+TbotLabelFrame.Size = UDim2.new(0, 110, 0, 35)
+TbotLabelFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+TbotLabelFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+TbotLabelFrame.BackgroundTransparency = 0.1
+TbotLabelFrame.Text = "TBOT: OFF"
+TbotLabelFrame.TextColor3 = Color3.fromRGB(255, 40, 40)
+TbotLabelFrame.Font = tbotFont
+TbotLabelFrame.TextSize = 16
+TbotLabelFrame.Parent = ScreenGui
+TbotLabelFrame.ZIndex = 50
+
+Instance.new("UICorner", TbotLabelFrame).CornerRadius = UDim.new(0, 4)
+
+local tbotEnabled = false
+local hitboxEnabled = false
+local hitboxSize = 15 -- Lakihan onti
+
+-- Hitbox Updater
+local function updateHitbox(char)
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if head then
+        if hitboxEnabled then
+            head.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+            head.Transparency = 1
+            head.CanCollide = false
+            head.Massless = true
+        else
+            head.Size = Vector3.new(2, 1, 1)
+        end
+    end
+end
+
+local function applyHitboxToAll()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            updateHitbox(p.Character)
+        end
+    end
+end
+
+-- Auto-apply hitbox pag nag-respawn (para hindi lumiit)
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function(char)
+        task.wait(1) -- Wait para mag-load yung character
+        updateHitbox(char)
+    end)
+end)
+
+-- Para sa mga players na nasa laro na bago pa na-on yung script
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        p.CharacterAdded:Connect(function(char)
+            task.wait(1)
+            updateHitbox(char)
+        end)
+        if p.Character then
+            updateHitbox(p.Character)
+        end
+    end
+end
+
+-- Auto Click Logic
+task.spawn(function()
+    while task.wait(0.1) do
+        if tbotEnabled then
+            local vu = game:GetService("VirtualUser")
+            vu:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(0.05)
+            vu:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end
+    end
+end)
+
+-- Click Event para mag-on/off
+TbotLabelFrame.MouseButton1Click:Connect(function()
+    tbotEnabled = not tbotEnabled
+    hitboxEnabled = tbotEnabled
+    
+    if tbotEnabled then
+        TbotLabelFrame.Text = "TBOT: ON"
+        TbotLabelFrame.TextColor3 = Color3.fromRGB(50, 255, 50)
+        applyHitboxToAll()
+    else
+        TbotLabelFrame.Text = "TBOT: OFF"
+        TbotLabelFrame.TextColor3 = Color3.fromRGB(255, 40, 40)
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                local head = p.Character:FindFirstChild("Head")
+                if head then
+                    head.Size = Vector3.new(2, 1, 1)
+                end
+            end
+        end
+    end
+end)
+
+-- Draggable
+local tbDragging, tbDragInput, tbDragStart, tbStartPos
+TbotLabelFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        tbDragging = true
+        tbDragStart = input.Position
+        tbStartPos = TbotLabelFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then tbDragging = false end
+        end)
+    end
+end)
+TbotLabelFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        tbDragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == tbDragInput and tbDragging then
+        local delta = input.Position - tbDragStart
+        TbotLabelFrame.Position = UDim2.new(tbStartPos.X.Scale, tbStartPos.X.Offset + delta.X, tbStartPos.Y.Scale, tbStartPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- ==========================================
+-- MAIN UI (Same as before)
+-- ==========================================
+local Main = Instance.new("Frame")
+Main.Name = "MainFrame"
+Main.Size = UDim2.new(0, 560, 0, 350) 
+Main.Position = UDim2.new(0.5, -280, 0.5, -175)
+Main.BackgroundColor3 = bgColor
+Main.BackgroundTransparency = 0.05
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+Main.Visible = false
+Main.ZIndex = 5
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+
+local function createGradientLine(size, pos, rotation)
+    local line = Instance.new("Frame")
+    line.Size = size
+    line.Position = pos
+    line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    line.BorderSizePixel = 0
+    line.ZIndex = 6
+    line.Parent = Main
+    Instance.new("UICorner", line).CornerRadius = UDim.new(1, 0)
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Rotation = rotation
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 150, 50)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 50, 50))
+    }
+    gradient.Parent = line
+
+    task.spawn(function()
+        local rot = rotation
+        while line.Parent do
+            rot = (rot + 1) % 360
+            gradient.Rotation = rot
+            task.wait(0.03)
+        end
+    end)
+end
+
+createGradientLine(UDim2.new(1, -20, 0, 2), UDim2.new(0, 10, 0, 0), 0) 
+createGradientLine(UDim2.new(1, -20, 0, 2), UDim2.new(0, 10, 1, -2), 180) 
+createGradientLine(UDim2.new(0, 2, 1, -20), UDim2.new(0, 0, 0, 10), 90) 
+createGradientLine(UDim2.new(0, 2, 1, -20), UDim2.new(1, -2, 0, 10), 270) 
+
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 45)
+TopBar.BackgroundTransparency = 1
+TopBar.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0, 200, 1, 0)
+Title.Position = UDim2.new(0, 25, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "HELLSTAR HUB"
+Title.TextColor3 = textColor
+Title.Font = mainFont
+Title.TextSize = 24
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -45, 0, 7)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = textColor
+CloseBtn.Font = mainFont
+CloseBtn.TextSize = 24
+CloseBtn.Parent = TopBar
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -80, 0, 7)
+MinBtn.BackgroundTransparency = 1
+MinBtn.Text = "—"
+MinBtn.TextColor3 = textColor
+MinBtn.Font = mainFont
+MinBtn.TextSize = 18
+MinBtn.Parent = TopBar
+
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 140, 1, -60)
+Sidebar.Position = UDim2.new(0, 15, 0, 50)
+Sidebar.BackgroundColor3 = sidebarColor
+Sidebar.BackgroundTransparency = 0.3
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = Main
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 6)
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -170, 1, -60)
+ContentFrame.Position = UDim2.new(0, 155, 0, 50)
+ContentFrame.BackgroundColor3 = sidebarColor
+ContentFrame.BackgroundTransparency = 0.5
+ContentFrame.BorderSizePixel = 0
+ContentFrame.Parent = Main
+Instance.new("UICorner", ContentFrame).CornerRadius = UDim.new(0, 6)
+
+local ContentTitle = Instance.new("TextLabel")
+ContentTitle.Size = UDim2.new(1, -30, 0, 35)
+ContentTitle.Position = UDim2.new(0, 15, 0, 10)
+ContentTitle.BackgroundTransparency = 1
+ContentTitle.Text = "SCRIPTS"
+ContentTitle.TextColor3 = textColor
+ContentTitle.Font = mainFont
+ContentTitle.TextSize = 28
+ContentTitle.TextXAlignment = Enum.TextXAlignment.Left
+ContentTitle.Parent = ContentFrame
+
+local ContentSub = Instance.new("TextLabel")
+ContentSub.Size = UDim2.new(1, -30, 0, 20)
+ContentSub.Position = UDim2.new(0, 15, 0, 40)
+ContentSub.BackgroundTransparency = 1
+ContentSub.Text = "EXECUTABLES"
+ContentSub.TextColor3 = textDim
+ContentSub.Font = mainFont
+ContentSub.TextSize = 14
+ContentSub.TextXAlignment = Enum.TextXAlignment.Left
+ContentSub.Parent = ContentFrame
+
+local function createTabFrame()
+    local f = Instance.new("ScrollingFrame")
+    f.Size = UDim2.new(1, -30, 1, -70)
+    f.Position = UDim2.new(0, 15, 0, 60)
+    f.BackgroundTransparency = 1
+    f.ScrollBarThickness = 2
+    f.ScrollBarImageColor3 = accentColor
+    f.Visible = false
+    f.Parent = ContentFrame
+    return f
+end
+
+local ScriptsTab = createTabFrame()
+local OtherTab = createTabFrame()
+local SettingsTab = createTabFrame()
+
+local function createActionButton(parent, name, yPos, callback)
+    local btnFrame = Instance.new("Frame")
+    btnFrame.Size = UDim2.new(1, 0, 0, 42)
+    btnFrame.Position = UDim2.new(0, 0, 0, yPos)
+    btnFrame.BackgroundColor3 = darkRow
+    btnFrame.Parent = parent
+    Instance.new("UICorner", btnFrame).CornerRadius = UDim.new(0, 4)
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, -90, 1, 0)
+    txt.Position = UDim2.new(0, 15, 0, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = string.upper(name)
+    txt.TextColor3 = textColor
+    txt.Font = mainFont
+    txt.TextSize = 18
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.Parent = btnFrame
+
+    local execBtn = Instance.new("TextButton")
+    execBtn.Size = UDim2.new(0, 70, 0, 28)
+    execBtn.Position = UDim2.new(1, -80, 0.5, -14)
+    execBtn.BackgroundColor3 = accentColor
+    execBtn.Text = "RUN"
+    execBtn.TextColor3 = textColor
+    execBtn.Font = mainFont
+    execBtn.TextSize = 16
+    execBtn.Parent = btnFrame
+    Instance.new("UICorner", execBtn).CornerRadius = UDim.new(0, 4)
+
+    execBtn.MouseButton1Click:Connect(function()
+        execBtn.Text = "..."
+        task.wait(0.1)
+        callback()
+        execBtn.Text = "DONE"
+        task.wait(1)
+        execBtn.Text = "RUN"
+    end)
+end
+
+-- SCRIPTS TAB CONTENT
+createActionButton(ScriptsTab, "LOADSTRING AIM", 0, function()
+    pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/Xw76vvjf"))() end)
+end)
+createActionButton(ScriptsTab, "Auto Armor", 50, function()
+    pcall(function() loadstring(game:HttpGet("https://scriptblox.com/raw/Da-Strike-(MOBILE-MACRO)-(GUN-FFA)-Auto-Armor-134574"))() end)
+end)
+createActionButton(ScriptsTab, "Fake Macro", 100, function()
+    pcall(function() loadstring(game:HttpGet("https://scriptblox.com/raw/Da-Hood-Fake-Macro-5784"))() end)
+end)
+createActionButton(ScriptsTab, "Camlock", 150, function()
+    pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/PAVRyMHy"))() end)
+end)
+
+-- OTHER TAB CONTENT
+local isFlying = false
+createActionButton(OtherTab, "TOGGLE FLY", 0, function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return end
+    
+    isFlying = not isFlying
+    if isFlying then
+        hum.PlatformStand = true
+        local bv = Instance.new("BodyVelocity", hrp)
+        bv.Name = "FlyVel"
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.zero
+        RunService.RenderStepped:Connect(function()
+            if not bv.Parent then return end
+            bv.Velocity = hum.MoveDirection * 50 + Vector3.new(0, (UserInputService:IsKeyDown(Enum.KeyCode.Space) and 50 or 0) - (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 50 or 0), 0)
+        end)
+    else
+        hum.PlatformStand = false
+        local bv = hrp:FindFirstChild("FlyVel")
+        if bv then bv:Destroy() end
+    end
+end)
+
+local doubleJumpEnabled = false
+local jumpsLeft = 2
+createActionButton(OtherTab, "DOUBLE JUMP", 50, function()
+    doubleJumpEnabled = not doubleJumpEnabled
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    jumpsLeft = 2
+    humanoid.StateChanged:Connect(function(old, new)
+        if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+            jumpsLeft = 2
+        end
+    end)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if doubleJumpEnabled and (input.KeyCode == Enum.KeyCode.Space or input.UserInputType == Enum.UserInputType.Touch) then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
+            local hum = char.Humanoid
+            local hrp = char.HumanoidRootPart
+            if hum:GetState() == Enum.HumanoidStateType.Freefall or hum:GetState() == Enum.HumanoidStateType.Jumping then
+                if jumpsLeft > 0 then
+                    jumpsLeft = jumpsLeft - 1
+                    hrp.Velocity = Vector3.new(hrp.Velocity.X, hum.JumpPower, hrp.Velocity.Z)
+                end
+            end
+        end
+    end
+end)
+
+createActionButton(OtherTab, "SPEED 50", 100, function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = char.Humanoid.WalkSpeed == 16 and 50 or 16
+    end
+end)
+
+-- SETTINGS TAB CONTENT
+local QuickResetBtn = Instance.new("TextButton")
+QuickResetBtn.Name = "QuickResetBtn"
+QuickResetBtn.Size = UDim2.new(0, 45, 0, 45)
+QuickResetBtn.Position = UDim2.new(0, 15, 0.5, 40) 
+QuickResetBtn.BackgroundColor3 = Color3.fromRGB(60, 15, 15)
+QuickResetBtn.Text = "R"
+QuickResetBtn.TextColor3 = accentColor
+QuickResetBtn.Font = mainFont
+QuickResetBtn.TextSize = 22
+QuickResetBtn.Parent = ScreenGui
+QuickResetBtn.Visible = false
+QuickResetBtn.ZIndex = 20
+
+Instance.new("UICorner", QuickResetBtn).CornerRadius = UDim.new(1, 0)
+local ResetStroke = Instance.new("UIStroke", QuickResetBtn)
+ResetStroke.Color = accentColor
+ResetStroke.Thickness = 1.5
+
+QuickResetBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.Health = 0
+    end
+end)
+
+createActionButton(SettingsTab, "SPAWN QUICK RESET", 0, function()
+    QuickResetBtn.Visible = true
+end)
+
+createActionButton(SettingsTab, "FORCE RESET", 50, function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.Health = 0
+    end
+end)
+
+-- NAVIGATION
+local function switchTab(titleText, subText, content)
+    ContentTitle.Text = titleText
+    ContentSub.Text = subText
+    for _, tab in pairs({ScriptsTab, OtherTab, SettingsTab}) do
+        if tab ~= content then tab.Visible = false end
+    end
+    content.Visible = true
+end
+
+local function createNavButton(text, yPos, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 30) 
+    btn.Position = UDim2.new(0, 10, 0, yPos)
+    btn.BackgroundTransparency = 1 
+    btn.Text = "   " .. string.upper(text)
+    btn.TextColor3 = textDim
+    btn.Font = mainFont
+    btn.TextSize = 18
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.Parent = Sidebar
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    
+    local isActive = false
+    btn.MouseEnter:Connect(function()
+        if not isActive then TweenService:Create(btn, hoverTweenInfo, {TextColor3 = textColor}):Play() end
+    end)
+    btn.MouseLeave:Connect(function()
+        if not isActive then TweenService:Create(btn, hoverTweenInfo, {TextColor3 = textDim}):Play() end
+    end)
+    
+    btn.MouseButton1Click:Connect(function()
+        for _, child in pairs(Sidebar:GetChildren()) do
+            if child:IsA("TextButton") then child.TextColor3 = textDim end
+        end
+        isActive = true
+        TweenService:Create(btn, hoverTweenInfo, {TextColor3 = textColor}):Play()
+        callback()
+    end)
+    return btn
+end
+
+local btnScripts = createNavButton("SCRIPTS", 15, function() switchTab("SCRIPTS", "EXECUTABLES", ScriptsTab) end)
+local btnOther = createNavButton("OTHER", 50, function() switchTab("OTHER", "FUNCTIONS", OtherTab) end)
+local btnSettings = createNavButton("SETTINGS", 85, function() switchTab("SETTINGS", "OPTIONS", SettingsTab) end)
+
+switchTab("SCRIPTS", "EXECUTABLES", ScriptsTab)
+btnScripts.TextColor3 = textColor
+
+-- TOGGLE BUTTON
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 45, 0, 45)
+ToggleBtn.Position = UDim2.new(0, 15, 0.5, -22.5)
+ToggleBtn.BackgroundColor3 = bgColor
+ToggleBtn.Text = "H"
+ToggleBtn.TextColor3 = textColor
+ToggleBtn.Font = mainFont
+ToggleBtn.TextSize = 24
+ToggleBtn.Parent = ScreenGui
+ToggleBtn.ZIndex = 20
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = accentColor
+ToggleStroke.Thickness = 1.5
+
+local function openUI()
+    ToggleBtn.Text = "×"
+    TweenService:Create(ToggleBtn, hoverTweenInfo, {TextColor3 = accentColor}):Play()
+    Main.Visible = true
+    Main.Size = UDim2.new(0, 500, 0, 300)
+    Main.BackgroundTransparency = 1
+    TweenService:Create(Main, openTweenInfo, {Size = UDim2.new(0, 560, 0, 350), BackgroundTransparency = 0.05}):Play()
+end
+
+local function closeUI()
+    TweenService:Create(ToggleBtn, hoverTweenInfo, {TextColor3 = textColor}):Play()
+    task.wait(0.1)
+    ToggleBtn.Text = "H"
+    local closeTween = TweenService:Create(Main, closeTweenInfo, {Size = UDim2.new(0, 500, 0, 300), BackgroundTransparency = 1})
+    closeTween:Play()
+    closeTween.Completed:Connect(function() Main.Visible = false end)
+end
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    if Main.Visible then closeUI() else openUI() end
+end)
+CloseBtn.MouseButton1Click:Connect(closeUI)
+MinBtn.MouseButton1Click:Connect(closeUI)
+
+-- Draggable
+local dragging, dragInput, dragStart, startPos
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+TopBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if not ScreenGui.Parent then ScreenGui.Parent = CoreGui end
+end)
